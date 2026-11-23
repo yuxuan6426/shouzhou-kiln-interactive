@@ -33,7 +33,7 @@ Tailwind CSS 4.3.3 的默认样式和生成 CSS 随应用分发，MIT 正文收�
 | `@types/react-dom` | 18.3.7 | MIT |
 | `@vitejs/plugin-react` | 4.7.0 | MIT |
 | `tailwindcss` | 4.3.3 | MIT |
-| `vite` | 6.4.3 | MIT |
+| `vite` | 6.4.6 | MIT |
 
 锁文件的第三方许可包括 MIT、ISC、BSD-3-Clause、Apache-2.0、CC-BY-4.0 与 MPL-2.0。分发工具链或 node_modules 时，应随附对应包的许可文件。依赖变化时同步版本表与许可证正文。
 

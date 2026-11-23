@@ -33,7 +33,7 @@ Tailwind CSS 4.3.3 default styles and generated CSS are distributed with the app
 | `@types/react-dom` | 18.3.7 | MIT |
 | `@vitejs/plugin-react` | 4.7.0 | MIT |
 | `tailwindcss` | 4.3.3 | MIT |
-| `vite` | 6.4.3 | MIT |
+| `vite` | 6.4.6 | MIT |
 
 Third-party licenses in the lockfile include MIT, ISC, BSD-3-Clause, Apache-2.0, CC-BY-4.0 and MPL-2.0. When distributing a toolchain or node_modules, include the corresponding package license files. Synchronize version tables and license texts after dependency changes.
 
