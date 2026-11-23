@@ -163,9 +163,9 @@ To remove an artifact, remove its runtime and index entries, sidecar, exclusivel
 ## 6. Interaction changes and regression checks
 
 - Derive image addresses directly from the current artifact to avoid stale images during rapid navigation.
-- Fullscreen and record dialogs use `createPortal(..., document.body)`. Preserve background scroll lock, Escape and focus restoration in both. The record dialog also traps Tab/Shift+Tab focus.
-- Pause underlying arrow-key navigation while a dialog is open.
-- Check initial loading, rapid switching, failed-image fallback and artifacts without processed images. Test at least a 1280×720 landscape viewport and add touch/narrow-screen checks for target devices.
+- The app chooses its layout by viewport. The wide layout requires at least 1024 CSS pixels of width and a viewport wider than it is tall. The compact layout has one vertical scrolling region, an independently swipeable thumbnail strip and a record panel with unscaled text.
+- The app owns the selected artifact, view and dialog across layout changes. Dialogs render through a portal to `document.body`. Keep the background and its arrow-key navigation inactive while open, trap Tab/Shift+Tab, close on Escape and restore focus to the current layout's trigger.
+- Check initial loading, rapid switching, failed-image fallback and artifacts without processed images. Verify wide layout at 1280×720, then scrolling and touch at 320×568 and in phone landscape. Check the 1024-pixel boundary, square viewports and iframe resizing.
 - Inspect console errors, image loading, overlapping controls and long text.
 
 If the environment specifies a fixed Playwright runtime, use its approved command, browser directory and Chromium version without automatically installing another browser.

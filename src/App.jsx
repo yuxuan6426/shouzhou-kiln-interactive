@@ -1,7 +1,8 @@
-import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react'
-import { BookOpen, ScrollText, Sparkles, X } from 'lucide-react'
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useSyncExternalStore } from 'react'
+import { BookOpen, ScrollText, Sparkles } from 'lucide-react'
 import ceramicsData from './data/shouzhou_ceramics.json'
 import CeramicDisplay from './components/CeramicDisplay'
+import ArchiveReader from './components/ArchiveReader'
 import DataPanel from './components/DataPanel'
 import ArtifactRail from './components/ArtifactRail'
 import { isCeramicFieldVisible } from './constants'
@@ -21,12 +22,24 @@ function resolveAssetUrl(assetPath) {
   return `${normalizedBaseUrl}${normalizedPath}`
 }
 
-const resolvedCeramicsData = ceramicsData.map((ceramic) => ({
+const ceramics = ceramicsData.map((ceramic) => ({
   ...ceramic,
   imageUrl: resolveAssetUrl(ceramic.imageUrl),
   thumbnailUrl: resolveAssetUrl(ceramic.thumbnailUrl),
   processedImageUrl: resolveAssetUrl(ceramic.processedImageUrl),
 }))
+
+// iframe 内的媒体查询使用该文档自己的视口。
+const wideViewport = window.matchMedia('(min-width: 1024px) and (aspect-ratio > 1/1)')
+
+function subscribeToLayout(onChange) {
+  wideViewport.addEventListener('change', onChange)
+  return () => wideViewport.removeEventListener('change', onChange)
+}
+
+function getWideLayout() {
+  return wideViewport.matches
+}
 
 function getDefaultViewMode(ceramic) {
   return ceramic?.processedImageUrl ? 'asset' : 'archive'
@@ -50,16 +63,28 @@ function preloadImage(src) {
 }
 
 function App() {
-  const ceramics = useMemo(() => resolvedCeramicsData, [])
+  const isWide = useSyncExternalStore(subscribeToLayout, getWideLayout)
   const [selectedId, setSelectedId] = useState(ceramics[0]?.id ?? null)
   const [viewMode, setViewMode] = useState(getDefaultViewMode(ceramics[0]))
-  // 资料面板按需打开，避免遮挡默认展陈视图。
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  const [activeDialog, setActiveDialog] = useState(null)
+  const galleryRef = useRef(null)
+  const recordTriggerRef = useRef(null)
+  const archiveTriggerRef = useRef(null)
+  const previousDialogRef = useRef(null)
 
-  const selectedCeramic = useMemo(
-    () => ceramics.find((ceramic) => ceramic.id === selectedId) ?? ceramics[0],
-    [selectedId, ceramics]
-  )
+  const selectedCeramic = ceramics.find((ceramic) => ceramic.id === selectedId) ?? ceramics[0]
+
+  useLayoutEffect(() => {
+    galleryRef.current.inert = Boolean(activeDialog)
+    const previousDialog = previousDialogRef.current
+    previousDialogRef.current = activeDialog
+
+    if (!activeDialog && previousDialog) {
+      // 调整窗口后，入口可能已经移到另一套布局。
+      const trigger = previousDialog === 'archive' ? archiveTriggerRef : recordTriggerRef
+      trigger.current?.focus()
+    }
+  }, [activeDialog])
 
   // 同步保存选中项，确保键盘连发时每个事件都从最新位置继续导航。
   const selectedIdRef = useRef(selectedId)
@@ -83,7 +108,7 @@ function App() {
     }
 
     handleSelectCeramic(ceramics[nextIndex])
-  }, [ceramics, handleSelectCeramic])
+  }, [handleSelectCeramic])
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -91,9 +116,7 @@ function App() {
       const isEditing =
         target instanceof HTMLElement &&
         (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
-      const hasOpenModal = Boolean(document.querySelector('[aria-modal="true"]'))
-
-      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || isEditing || hasOpenModal) {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || isEditing || activeDialog) {
         return
       }
 
@@ -108,7 +131,7 @@ function App() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [navigateCeramic])
+  }, [activeDialog, navigateCeramic])
 
   // 只预加载相邻展品的默认图片，兼顾顺序浏览速度和初始资源开销。
   useEffect(() => {
@@ -120,18 +143,39 @@ function App() {
     const nextCeramic = ceramics[(currentIndex + 1) % ceramics.length]
     preloadImage(getPrimaryImage(prevCeramic))
     preloadImage(getPrimaryImage(nextCeramic))
-  }, [selectedId, ceramics])
+  }, [selectedId])
 
   const currentModeLabel = viewMode === 'asset' ? '数字资产主视图' : '档案视图'
   const currentModeIcon = viewMode === 'asset' ? <Sparkles size={14} /> : <ScrollText size={14} />
 
-  const handleOpenDataPanel = useCallback(() => {
-    setIsDrawerOpen(true)
-  }, [])
-
-  const handleCloseDataPanel = useCallback(() => {
-    setIsDrawerOpen(false)
-  }, [])
+  const handleCloseDialog = useCallback(() => setActiveDialog(null), [])
+  const navigation = (
+    <ArtifactRail ceramics={ceramics} selectedId={selectedCeramic.id} onSelect={handleSelectCeramic} compact={!isWide} />
+  )
+  const recordButton = (
+    <button
+      ref={recordTriggerRef}
+      type="button"
+      onClick={() => setActiveDialog('record')}
+      aria-haspopup="dialog"
+      className="inline-flex min-h-[48px] items-center gap-2 rounded-full border border-bronze-600/40 bg-bronze-800/20 px-5 py-2 text-sm text-bronze-100 transition active:scale-[0.97] active:opacity-80 hover:border-bronze-400/60 hover:bg-bronze-700/30"
+    >
+      <BookOpen size={18} />
+      查看文物资料
+    </button>
+  )
+  const exhibit = (
+    <CeramicDisplay
+      ceramic={selectedCeramic}
+      viewMode={viewMode}
+      onViewModeChange={setViewMode}
+      onOpenArchive={() => setActiveDialog('archive')}
+      archiveTriggerRef={archiveTriggerRef}
+      compact={!isWide}
+      navigation={navigation}
+      recordButton={recordButton}
+    />
+  )
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-[#110f0d] text-bronze-100 select-none" style={{ touchAction: 'pan-x pan-y' }}>
@@ -150,69 +194,80 @@ function App() {
         />
       </div>
 
-      <div className="relative z-10 flex h-full flex-col overflow-hidden">
-        {/* 顶部信息栏 */}
-        <header className="shrink-0 px-4 pb-4 pt-4 sm:px-6 lg:px-8">
-          <div className="rounded-[28px] border border-bronze-700/40 bg-black/25 px-5 py-4 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="min-w-0">
-                <p className="text-xs uppercase tracking-[0.35em] text-bronze-500">Shouzhou Kiln Interactive Gallery</p>
-                <h1 className="mt-2 text-3xl font-semibold text-bronze-100 sm:text-4xl">寿州窑文物数字展台</h1>
-              </div>
+      <div
+        ref={galleryRef}
+        data-gallery-layout={isWide ? 'wide' : 'compact'}
+        className={isWide ? 'relative z-10 flex h-full flex-col overflow-hidden' : 'compact-gallery relative z-10'}
+      >
+        {isWide ? (
+          <>
+            {/* 顶部信息栏 */}
+            <header className="shrink-0 px-4 pb-4 pt-4 sm:px-6 lg:px-8">
+              <div className="rounded-[28px] border border-bronze-700/40 bg-black/25 px-5 py-4 shadow-[0_24px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs uppercase tracking-[0.35em] text-bronze-500">Shouzhou Kiln Interactive Gallery</p>
+                    <h1 className="mt-2 text-3xl font-semibold text-bronze-100 sm:text-4xl">寿州窑文物数字展台</h1>
+                  </div>
 
               <div className="flex flex-col gap-3 lg:items-end">
-                <div className="flex flex-wrap items-center gap-2">
-                  {isCeramicFieldVisible(selectedCeramic, 'dynasty') && selectedCeramic.dynasty && (
-                    <span className="rounded-full border border-celadon-700/40 bg-celadon-900/30 px-4 py-1.5 text-sm text-celadon-200">
-                      {selectedCeramic.dynasty}
-                    </span>
-                  )}
-                  {isCeramicFieldVisible(selectedCeramic, 'period') && selectedCeramic.period && (
-                    <span className="rounded-full border border-bronze-700/40 bg-bronze-900/20 px-4 py-1.5 text-sm text-bronze-300">
-                      {selectedCeramic.period}
-                    </span>
-                  )}
-                  <span className="inline-flex items-center gap-2 rounded-full border border-bronze-600/30 bg-black/30 px-4 py-1.5 text-sm text-bronze-200">
-                    {currentModeIcon}
-                    {currentModeLabel}
-                  </span>
-                </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {isCeramicFieldVisible(selectedCeramic, 'dynasty') && selectedCeramic.dynasty && (
+                        <span className="rounded-full border border-celadon-700/40 bg-celadon-900/30 px-4 py-1.5 text-sm text-celadon-200">
+                          {selectedCeramic.dynasty}
+                        </span>
+                      )}
+                      {isCeramicFieldVisible(selectedCeramic, 'period') && selectedCeramic.period && (
+                        <span className="rounded-full border border-bronze-700/40 bg-bronze-900/20 px-4 py-1.5 text-sm text-bronze-300">
+                          {selectedCeramic.period}
+                        </span>
+                      )}
+                      <span className="inline-flex items-center gap-2 rounded-full border border-bronze-600/30 bg-black/30 px-4 py-1.5 text-sm text-bronze-200">
+                        {currentModeIcon}
+                        {currentModeLabel}
+                      </span>
+                    </div>
 
                 <div className="flex items-center gap-3 self-start lg:self-auto">
-                  <div className="rounded-full border border-bronze-700/40 bg-black/20 px-4 py-1.5 text-sm text-bronze-400">
-                    馆藏总量 {ceramics.length} 件
+                      <div className="rounded-full border border-bronze-700/40 bg-black/20 px-4 py-1.5 text-sm text-bronze-400">
+                        馆藏总量 {ceramics.length} 件
+                      </div>
+                      {recordButton}
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={isDrawerOpen ? handleCloseDataPanel : handleOpenDataPanel}
-                    className="inline-flex min-h-[48px] items-center gap-2 rounded-full border border-bronze-600/40 bg-bronze-800/20 px-5 py-2 text-sm text-bronze-100 transition active:scale-[0.97] active:opacity-80 hover:border-bronze-400/60 hover:bg-bronze-700/30"
-                  >
-                    {isDrawerOpen ? <X size={18} /> : <BookOpen size={18} />}
-                    {isDrawerOpen ? '关闭资料弹窗' : '查看文物资料'}
-                  </button>
                 </div>
               </div>
-            </div>
-          </div>
-        </header>
+            </header>
 
         {/* 主展台 */}
-        <main className="flex-1 min-h-0 px-4 pb-4 sm:px-6 lg:px-8">
-          <div className="relative h-full min-h-0 overflow-hidden rounded-[32px] border border-bronze-700/30 bg-black/20 shadow-[0_30px_120px_rgba(0,0,0,0.45)] backdrop-blur-md">
-            <CeramicDisplay ceramic={selectedCeramic} viewMode={viewMode} onViewModeChange={setViewMode} />
-            <DataPanel ceramic={selectedCeramic} viewMode={viewMode} isOpen={isDrawerOpen} onClose={handleCloseDataPanel} />
-          </div>
-        </main>
+            <main className="flex-1 min-h-0 px-4 pb-4 sm:px-6 lg:px-8">
+              <div className="relative h-full min-h-0 overflow-hidden rounded-[32px] border border-bronze-700/30 bg-black/20 shadow-[0_30px_120px_rgba(0,0,0,0.45)] backdrop-blur-md">
+                {exhibit}
+              </div>
+            </main>
 
         {/* 文物导航 */}
-        <div className="shrink-0">
-          <ArtifactRail
-            ceramics={ceramics}
-            selectedId={selectedCeramic.id}
-            onSelect={handleSelectCeramic}
-          />
-        </div>
+            <div className="shrink-0">
+              {navigation}
+            </div>
+          </>
+        ) : (
+          <div className="mx-auto max-w-3xl">
+            <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-bronze-700/40 pb-3">
+              <h1 className="text-base font-semibold text-bronze-100 sm:text-lg">寿州窑文物数字展台</h1>
+              <span className="text-xs text-bronze-400">馆藏 {ceramics.length} 件</span>
+            </header>
+            <main className="pt-3">{exhibit}</main>
+          </div>
+        )}
       </div>
+
+      {activeDialog === 'record' && (
+        <DataPanel ceramic={selectedCeramic} viewMode={viewMode} onClose={handleCloseDialog} compact={!isWide} />
+      )}
+      {activeDialog === 'archive' && (
+        <ArchiveReader ceramic={selectedCeramic} onClose={handleCloseDialog} compact={!isWide} />
+      )}
     </div>
   )
 }

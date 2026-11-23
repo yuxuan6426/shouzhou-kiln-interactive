@@ -1,5 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import React, { useLayoutEffect, useRef } from 'react'
 import PropTypes from 'prop-types'
 import {
   BookOpen,
@@ -13,6 +12,7 @@ import {
   X,
 } from 'lucide-react'
 import { isCeramicFieldVisible } from '../constants'
+import GalleryDialog from './GalleryDialog'
 
 function DetailSection({ icon: Icon, title, children, accent = 'bronze' }) {
   const accentClasses =
@@ -48,7 +48,7 @@ function ValuePair({ label, value, compact = false }) {
       <span className="shrink-0 text-sm text-bronze-500">{label}</span>
       <span
         title={typeof value === 'string' ? value : undefined}
-        className={`text-right text-sm text-bronze-100 ${compact ? 'min-w-0 truncate text-xs text-bronze-300' : ''}`}
+        className={`record-value min-w-0 text-right text-sm text-bronze-100 ${compact ? 'record-path truncate text-xs text-bronze-300' : ''}`}
       >
         {value}
       </span>
@@ -59,128 +59,50 @@ function ValuePair({ label, value, compact = false }) {
 // 内容优先缩放到一屏；达到下限后保留滚动，避免文字过小。
 const MIN_FIT_ZOOM = 0.55
 
-export default function DataPanel({ ceramic, viewMode, isOpen, onClose }) {
-  const panelRef = useRef(null)
-  const closeButtonRef = useRef(null)
+export default function DataPanel({ ceramic, viewMode, onClose, compact }) {
   const scrollRef = useRef(null)
   const gridRef = useRef(null)
-  const [fitZoom, setFitZoom] = useState('')
-  // 打开时锁定背景滚动、约束焦点，并在关闭后恢复现场。
-  useEffect(() => {
-    if (!isOpen) return
-    const originalOverflow = document.body.style.overflow
-    const previouslyFocused = document.activeElement
-    document.body.style.overflow = 'hidden'
-    closeButtonRef.current?.focus()
 
-    const handleDialogKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        event.stopPropagation()
-        onClose()
-        return
-      }
-
-      if (event.key === 'Tab') {
-        const focusableElements = Array.from(
-          panelRef.current?.querySelectorAll('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])') || []
-        ).filter((element) => element instanceof HTMLElement && !element.hidden)
-        if (focusableElements.length === 0) {
-          event.preventDefault()
-          return
-        }
-        const firstElement = focusableElements[0]
-        const lastElement = focusableElements[focusableElements.length - 1]
-        if (event.shiftKey && document.activeElement === firstElement) {
-          event.preventDefault()
-          lastElement.focus()
-        } else if (!event.shiftKey && document.activeElement === lastElement) {
-          event.preventDefault()
-          firstElement.focus()
-        }
-      }
-    }
-    window.addEventListener('keydown', handleDialogKeyDown)
-    return () => {
-      document.body.style.overflow = originalOverflow
-      window.removeEventListener('keydown', handleDialogKeyDown)
-      if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) {
-        previouslyFocused.focus()
-      }
-    }
-  }, [isOpen, onClose])
-
-  // 先按自然高度计算缩放，再校正缩放造成的额外换行。
+  // 仅展台版需要将资料压到一屏，窄屏版使用自然字号滚动。
   useLayoutEffect(() => {
-    if (!isOpen) {
-      return
-    }
-    const previousZoom = gridRef.current?.style.zoom ?? ''
-    let cancelled = false
-    let timer = null
+    if (compact) return
 
-    const setZoom = (value) => {
-      const gridEl = gridRef.current
-      if (!gridEl) {
-        return
-      }
-      gridEl.style.zoom = value
-      setFitZoom(value)
-    }
+    const scrollEl = scrollRef.current
+    const gridEl = gridRef.current
+    let timer
 
-    // 最多校正四次，避免文本换行使内容再次超出容器。
-    const scheduleCorrection = (iteration) => {
-      if (cancelled || iteration >= 4) {
-        return
-      }
-      timer = setTimeout(() => {
-        const scrollEl = scrollRef.current
-        const gridEl = gridRef.current
-        if (!scrollEl || !gridEl || scrollEl.scrollHeight <= scrollEl.clientHeight + 1) {
+    const fitZoom = () => {
+      clearTimeout(timer)
+      gridEl.style.zoom = ''
+      if (scrollEl.scrollHeight <= scrollEl.clientHeight + 1) return
+
+      const ratio = Math.max(MIN_FIT_ZOOM, (scrollEl.clientHeight / scrollEl.scrollHeight) * 0.99)
+      gridEl.style.zoom = ratio < 0.995 ? String(ratio) : ''
+
+      // 缩放后换行可能变化，最多校正四次。
+      const correct = (remaining) => {
+        const current = Number(gridEl.style.zoom) || 1
+        if (remaining === 0 || current <= MIN_FIT_ZOOM || scrollEl.scrollHeight <= scrollEl.clientHeight + 1) {
           return
         }
-        const current = parseFloat(gridEl.style.zoom || '1')
-        const next = Math.max(MIN_FIT_ZOOM, current * (scrollEl.clientHeight / scrollEl.scrollHeight) * 0.99)
-        setZoom(String(next))
-        scheduleCorrection(iteration + 1)
-      }, 60)
+        timer = setTimeout(() => {
+          const next = current * (scrollEl.clientHeight / scrollEl.scrollHeight) * 0.99
+          gridEl.style.zoom = String(Math.max(MIN_FIT_ZOOM, next))
+          correct(remaining - 1)
+        }, 60)
+      }
+
+      correct(4)
     }
 
-    // 临时恢复自然尺寸完成测量，再同步写回目标缩放。
-    const measureAndApply = () => {
-      const scrollEl = scrollRef.current
-      const gridEl = gridRef.current
-      if (!scrollEl || !gridEl) {
-        return
-      }
-      gridEl.style.zoom = ''
-      const available = scrollEl.clientHeight
-      const natural = scrollEl.scrollHeight
-      if (natural <= available + 1) {
-        setZoom('')
-        return
-      }
-      const ratio = Math.max(MIN_FIT_ZOOM, (available / natural) * 0.99)
-      setZoom(ratio < 0.995 ? String(ratio) : '')
-      scheduleCorrection(0)
-    }
-    measureAndApply()
-    window.addEventListener('resize', measureAndApply)
+    fitZoom()
+    window.addEventListener('resize', fitZoom)
     return () => {
-      cancelled = true
-      if (timer) {
-        clearTimeout(timer)
-      }
-      window.removeEventListener('resize', measureAndApply)
-      if (gridRef.current) {
-        gridRef.current.style.zoom = previousZoom
-      }
+      clearTimeout(timer)
+      window.removeEventListener('resize', fitZoom)
+      gridEl.style.zoom = ''
     }
-  }, [isOpen, ceramic.id])
-
-  if (!isOpen) {
-    return null
-  }
+  }, [ceramic.id, compact])
 
   const showDescription = isCeramicFieldVisible(ceramic, 'description') && Boolean(ceramic.description)
   const showTags = isCeramicFieldVisible(ceramic, 'highlightTags') && ceramic.highlightTags?.length > 0
@@ -201,31 +123,57 @@ export default function DataPanel({ ceramic, viewMode, isOpen, onClose }) {
     isCeramicFieldVisible(ceramic, 'historicalSignificance') && Boolean(ceramic.historicalSignificance)
   const usesPillowDimensions = ceramic.name.includes('枕')
 
-  return createPortal(
-    <div
-      className="overlay-fade fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-2 backdrop-blur-xs sm:p-3"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="data-panel-title"
+  const summary = (
+    <div className="mt-3 flex flex-wrap items-end justify-between gap-3 rounded-[20px] border border-bronze-700/30 bg-white/5 px-4 py-3">
+      <div className="min-w-0">
+        <p className="text-xs uppercase tracking-[0.24em] text-bronze-500">
+          {ceramic.archiveId || ceramic.id}
+        </p>
+        <h4 className="mt-1 text-lg font-medium text-bronze-100">{ceramic.name}</h4>
+        {ceramic.nameEn && <p className="mt-1 text-sm text-bronze-400">{ceramic.nameEn}</p>}
+      </div>
+      {showTags && (
+        <div className="flex flex-wrap gap-2">
+          {ceramic.highlightTags.slice(0, 4).map((tag) => (
+            <span
+              key={tag}
+              className="rounded-full border border-celadon-600/30 bg-celadon-500/10 px-3 py-1 text-xs text-celadon-100"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
+  return (
+    <GalleryDialog
+      className={`overlay-fade fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-xs ${
+        compact ? 'compact-record compact-record-padding' : 'p-2 sm:p-3'
+      }`}
+      onClose={onClose}
+      labelledBy="data-panel-title"
     >
       <div
-        ref={panelRef}
-        className="sheet-pop flex max-h-[97dvh] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] border border-bronze-700/35 bg-[linear-gradient(180deg,rgba(12,11,10,0.97)_0%,rgba(17,15,13,0.95)_100%)] shadow-[0_30px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl"
-        onClick={(event) => event.stopPropagation()}
+        className={`sheet-pop flex w-full flex-col overflow-hidden border border-bronze-700/35 bg-[linear-gradient(180deg,rgba(12,11,10,0.97)_0%,rgba(17,15,13,0.95)_100%)] shadow-[0_30px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl ${
+          compact ? 'h-full max-w-3xl rounded-[20px]' : 'max-h-[97dvh] max-w-6xl rounded-[28px]'
+        }`}
       >
-        <div className="shrink-0 border-b border-bronze-700/25 px-5 py-3 sm:px-7">
-          <div className="flex items-start justify-between gap-3">
+        <div className={`shrink-0 border-b border-bronze-700/25 ${compact ? 'px-4 py-2' : 'px-5 py-3 sm:px-7'}`}>
+          <div className={`flex justify-between gap-3 ${compact ? 'items-center' : 'items-start'}`}>
             <div className="min-w-0">
-              <p className="text-xs uppercase tracking-[0.3em] text-bronze-500">Curatorial Panel</p>
+              {!compact && <p className="text-xs uppercase tracking-[0.3em] text-bronze-500">Curatorial Panel</p>}
               <h3 id="data-panel-title" className="mt-1 text-xl font-semibold text-bronze-50">文物档案摘要</h3>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <span className="rounded-full border border-celadon-600/35 bg-celadon-500/10 px-3 py-1 text-xs text-celadon-200">
-                {viewMode === 'asset' ? 'Digital' : 'Archive'}
-              </span>
+              {!compact && (
+                <span className="rounded-full border border-celadon-600/35 bg-celadon-500/10 px-3 py-1 text-xs text-celadon-200">
+                  {viewMode === 'asset' ? 'Digital' : 'Archive'}
+                </span>
+              )}
               <button
-                ref={closeButtonRef}
+                data-dialog-close
                 type="button"
                 onClick={onClose}
                 className="inline-flex min-h-[48px] min-w-[48px] items-center justify-center rounded-full border border-bronze-600/30 bg-bronze-900/20 p-2 text-bronze-300 transition active:scale-95 hover:border-bronze-400/50 hover:bg-bronze-700/30 hover:text-bronze-100"
@@ -236,35 +184,20 @@ export default function DataPanel({ ceramic, viewMode, isOpen, onClose }) {
             </div>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-end justify-between gap-3 rounded-[20px] border border-bronze-700/30 bg-white/5 px-4 py-3">
-            <div className="min-w-0">
-              <p className="text-xs uppercase tracking-[0.24em] text-bronze-500">
-                {ceramic.archiveId || ceramic.id}
-              </p>
-              <h4 className="mt-1 text-lg font-medium text-bronze-100">{ceramic.name}</h4>
-              {ceramic.nameEn && <p className="mt-1 text-sm text-bronze-400">{ceramic.nameEn}</p>}
-            </div>
-            {showTags && (
-              <div className="flex flex-wrap gap-2">
-                {ceramic.highlightTags.slice(0, 4).map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-full border border-celadon-600/30 bg-celadon-500/10 px-3 py-1 text-xs text-celadon-100"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
+          {!compact && summary}
         </div>
 
-        {/* 大屏三栏、中屏双栏；仅在内容超高时应用 fitZoom。 */}
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-2 sm:px-7">
+        <div
+          ref={scrollRef}
+          className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${compact ? 'px-4 pb-4' : 'px-5 py-2 sm:px-7'}`}
+          tabIndex={0}
+          role="region"
+          aria-label="文物档案正文"
+        >
+          {compact && summary}
           <div
             ref={gridRef}
-            className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2 xl:grid-cols-3"
-            style={fitZoom ? { zoom: Number(fitZoom) } : undefined}
+            className={`grid grid-cols-1 items-start gap-3 ${compact ? 'mt-3' : 'lg:grid-cols-2 xl:grid-cols-3'}`}
           >
             <div className="space-y-3">
               {(showDescription || showTags) && (
@@ -358,8 +291,7 @@ export default function DataPanel({ ceramic, viewMode, isOpen, onClose }) {
           </div>
         </div>
       </div>
-    </div>,
-    document.body
+    </GalleryDialog>
   )
 }
 
@@ -397,7 +329,7 @@ DataPanel.propTypes = {
     hiddenFields: PropTypes.arrayOf(PropTypes.string),
   }).isRequired,
   viewMode: PropTypes.oneOf(['asset', 'archive']).isRequired,
-  isOpen: PropTypes.bool.isRequired,
+  compact: PropTypes.bool.isRequired,
   onClose: PropTypes.func.isRequired,
 }
 

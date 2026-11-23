@@ -220,11 +220,11 @@ Source: https://github.com/yuxuan6426/shouzhou-kiln-interactive/blob/main/docs/U
 
 ## 浏览展台
 
-打开[在线展台](https://shouzhou-kiln-interactive.yuxuan.wiki/)，在底部导航选择文物。左右方向键切换前后展品，导航两侧按钮滚动缩略图列表。
+打开[在线展台](https://shouzhou-kiln-interactive.yuxuan.wiki/)。宽屏将文物主图和展签并排展示，底部是文物导航。窄屏先展示主图、名称和视图切换，下方是可横滑的缩略图和可以纵向阅读的展签。两种布局都可用左右方向键切换展品，也可用缩略图轨道两侧的按钮浏览目录。
 
 “数字资产”展示处理后的器物图像，“档案视图”展示扫描页。76 件文物有处理图，另 2 件直接显示档案。点击档案图进入全屏阅读，上下滚动查看扫描页。
 
-点击“查看文物资料”阅读尺寸、出土、馆藏与工艺信息。按 `Esc` 或使用关闭按钮退出资料面板与全屏阅读。在资料弹窗中，`Tab` 和 `Shift+Tab` 可循环移动焦点。
+点击“查看文物资料”阅读尺寸、出土、馆藏与工艺信息。窄屏入口在展签下方，资料可在单列面板中纵向滚动。按 `Esc` 或使用关闭按钮退出资料面板与全屏阅读。弹层内可用 `Tab` 和 `Shift+Tab` 循环移动焦点。
 
 ## 本地启动
 
@@ -248,7 +248,7 @@ npm run preview -- --host 127.0.0.1 --port 4173 --strictPort
 
 访问 `http://127.0.0.1:4173/`。预览读取 `dist/`；修改源码后重新构建。可将 `dist/` 交给 HTTP 静态服务器，在网站、本机或内网提供访问。离线环境先完成依赖安装和构建，再通过本地 HTTP 服务使用。页面使用本地图片和系统字体。
 
-浏览器要求：Chrome 111+、Safari 16.4+、Firefox 128+。展台优先适配横向展示，窄屏按响应式布局排列内容。
+浏览器要求：Chrome 111+、Safari 16.4+、Firefox 128+。视口宽度至少为 1024 CSS 像素且宽度大于高度时显示宽屏展台，其余尺寸显示窄屏版。嵌入 iframe 时按 iframe 的视口切换。调整窗口或旋转设备后会保留当前展品、视图和打开的弹层。
 
 ## 常见问题
 
@@ -273,11 +273,11 @@ Source: https://github.com/yuxuan6426/shouzhou-kiln-interactive/blob/main/docs/U
 
 ## Explore the gallery
 
-Open the [live gallery](https://shouzhou-kiln-interactive.yuxuan.wiki/) and select an artifact from the bottom strip. The left and right arrow keys move between artifacts; the strip's arrow buttons scroll its thumbnails.
+Open the [live gallery](https://shouzhou-kiln-interactive.yuxuan.wiki/). The wide layout places the image and exhibit label side by side, with the artifact strip below. The compact layout starts with the image, name and view controls, followed by a swipeable thumbnail strip and a vertically scrollable exhibit label. In both layouts, use the Left and Right Arrow keys to change artifacts or the strip's arrow buttons to browse thumbnails.
 
 “数字资产” displays the processed artifact image; “档案视图” displays the scanned archive. There are 76 artifacts with processed images and 2 that open directly in archive view. Select an archive image to read it in fullscreen and scroll through the page.
 
-Select “查看文物资料” to read dimensions, excavation, collection and technical features. Press `Esc` or use the close button to exit the record panel or fullscreen reader. In the record dialog, use `Tab` and `Shift+Tab` to cycle focus between its controls.
+Select “查看文物资料” to read dimensions, excavation, collection and technical features. In the compact layout, this button is below the exhibit label and opens a scrollable single-column panel. Press `Esc` or use the close button to exit the record panel or fullscreen reader. Use `Tab` and `Shift+Tab` to cycle focus within either dialog.
 
 ## Run locally
 
@@ -301,7 +301,7 @@ npm run preview -- --host 127.0.0.1 --port 4173 --strictPort
 
 Open `http://127.0.0.1:4173/`. Preview serves `dist/`; rebuild after editing source files. Serve `dist/` with an HTTP static server for a website, local machine or intranet. For offline use, install dependencies and build first, then run a local HTTP server. Images are local and fonts use the system font stack.
 
-Browser requirements: Chrome 111+, Safari 16.4+, Firefox 128+. The gallery prioritizes landscape displays and adapts its layout on narrow screens.
+Browser requirements are Chrome 111+, Safari 16.4+ and Firefox 128+. The wide layout appears when the viewport is at least 1024 CSS pixels wide and wider than it is tall. Other sizes use the compact layout. An embedded gallery uses its iframe's viewport. Resizing or rotating preserves the selected artifact, view and open dialog.
 
 ## Troubleshooting
 
@@ -485,9 +485,9 @@ npm run check
 ## 6. 交互修改与回归
 
 - 主图地址由当前文物直接派生，避免额外 state 在快速切换时显示上一件图片。
-- 全屏档案与资料面板使用 `createPortal(..., document.body)`。两者均需保留背景滚动锁、Escape 关闭及关闭后的焦点恢复；资料弹窗还需保留 Tab/Shift+Tab 焦点循环。
-- 弹层开启时，底层方向键导航应暂停。
-- 验证首屏加载、连续切换、图片失败回退及无处理图条目。最低验证 1280×720 横向视口；按实际设备增加触控和小屏检查。
+- 应用入口根据视口选择布局。宽度至少 1024 CSS 像素且宽度大于高度时使用宽屏展台。窄屏使用单一纵向滚动区域，缩略图独立横滑，资料面板保留自然字号。
+- 展品、视图和弹层状态由应用入口持有，切换布局时继续使用同一状态。弹层通过 Portal 渲染到 `document.body`，打开时锁定背景交互和方向键导航，保留 Escape、Tab/Shift+Tab 焦点循环和关闭后的入口焦点恢复。
+- 验证首屏加载、连续切换、图片失败回退及无处理图条目。用 1280×720 检查宽屏，用 320×568 和手机横屏检查滚动和触控，再检查 1024 像素边界、方屏和 iframe 缩放。
 - 在浏览器中检查控制台错误、图片加载、遮挡及长文字。
 
 运行环境中有固定 Playwright 策略时，必须使用其指定命令、浏览器目录及 Chromium 版本，不自动安装另一份浏览器。
@@ -680,9 +680,9 @@ To remove an artifact, remove its runtime and index entries, sidecar, exclusivel
 ## 6. Interaction changes and regression checks
 
 - Derive image addresses directly from the current artifact to avoid stale images during rapid navigation.
-- Fullscreen and record dialogs use `createPortal(..., document.body)`. Preserve background scroll lock, Escape and focus restoration in both. The record dialog also traps Tab/Shift+Tab focus.
-- Pause underlying arrow-key navigation while a dialog is open.
-- Check initial loading, rapid switching, failed-image fallback and artifacts without processed images. Test at least a 1280×720 landscape viewport and add touch/narrow-screen checks for target devices.
+- The app chooses its layout by viewport. The wide layout requires at least 1024 CSS pixels of width and a viewport wider than it is tall. The compact layout has one vertical scrolling region, an independently swipeable thumbnail strip and a record panel with unscaled text.
+- The app owns the selected artifact, view and dialog across layout changes. Dialogs render through a portal to `document.body`. Keep the background and its arrow-key navigation inactive while open, trap Tab/Shift+Tab, close on Escape and restore focus to the current layout's trigger.
+- Check initial loading, rapid switching, failed-image fallback and artifacts without processed images. Verify wide layout at 1280×720, then scrolling and touch at 320×568 and in phone landscape. Check the 1024-pixel boundary, square viewports and iframe resizing.
 - Inspect console errors, image loading, overlapping controls and long text.
 
 If the environment specifies a fixed Playwright runtime, use its approved command, browser directory and Chromium version without automatically installing another browser.

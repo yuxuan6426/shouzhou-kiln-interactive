@@ -1,7 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import React from 'react'
 import PropTypes from 'prop-types'
-import { Eye, Sparkles, ZoomIn, X } from 'lucide-react'
+import { Eye, Sparkles, ZoomIn } from 'lucide-react'
 import ImageWithFallback from './ImageWithFallback'
 import { isCeramicFieldVisible } from '../constants'
 
@@ -39,10 +38,8 @@ function ModeToggle({ viewMode, onChange }) {
 }
 
 // 舞台切换由组件重挂载和 CSS 过渡完成，不保留过期的展品节点。
-function AssetStage({ ceramic, viewMode }) {
-  // 图片地址直接从当前展品派生，避免额外状态产生同步延迟。
-  const [useFallback, setUseFallback] = useState(false)
-  const assetSrc = useFallback ? ceramic.imageUrl : (ceramic.processedImageUrl || ceramic.imageUrl)
+function AssetStage({ ceramic, compact }) {
+  const assetSrc = ceramic.processedImageUrl || ceramic.imageUrl
 
   return (
     <div
@@ -56,24 +53,20 @@ function AssetStage({ ceramic, viewMode }) {
         <div className="hero-float relative h-full w-full">
           {/* 展品或视图变化时重新挂载图片状态。 */}
           <ImageWithFallback
-            key={ceramic.id + viewMode}
             src={assetSrc}
             fallbackSrc={ceramic.imageUrl}
             alt={`${ceramic.name} 数字资产图`}
             className="h-full w-full object-contain drop-shadow-[0_32px_60px_rgba(0,0,0,0.6)]"
             style={{ filter: 'contrast(1.06) brightness(1.02) saturate(1.04)' }}
-            onError={() => {
-              if (!useFallback && ceramic.processedImageUrl) {
-                setUseFallback(true)
-              }
-            }}
           />
         </div>
       </div>
-      <div className="absolute right-4 top-4 rounded-full border border-celadon-400/30 bg-celadon-500/15 px-3 py-1 text-xs tracking-[0.2em] text-celadon-100">
-        DIGITAL HERO
-      </div>
-      {ceramic.imageProcessedBy && (
+      {!compact && (
+        <div className="absolute right-4 top-4 rounded-full border border-celadon-400/30 bg-celadon-500/15 px-3 py-1 text-xs tracking-[0.2em] text-celadon-100">
+          DIGITAL HERO
+        </div>
+      )}
+      {!compact && ceramic.imageProcessedBy && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-white/10 bg-black/45 px-4 py-2 text-xs text-celadon-100">
           {ceramic.imageProcessedBy}
         </div>
@@ -90,10 +83,10 @@ AssetStage.propTypes = {
     processedImageUrl: PropTypes.string,
     imageProcessedBy: PropTypes.string,
   }).isRequired,
-  viewMode: PropTypes.string.isRequired,
+  compact: PropTypes.bool.isRequired,
 }
 
-function ArchiveStage({ ceramic, viewMode, onOpenFullscreen }) {
+function ArchiveStage({ ceramic, onOpenFullscreen, triggerRef, compact }) {
   const handleKeyDown = (event) => {
     if (event.target !== event.currentTarget) return
 
@@ -105,8 +98,9 @@ function ArchiveStage({ ceramic, viewMode, onOpenFullscreen }) {
 
   return (
     <div
-      key="archive-stage"
+      ref={triggerRef}
       onClick={onOpenFullscreen}
+      aria-haspopup="dialog"
       onKeyDown={handleKeyDown}
       role="button"
       tabIndex={0}
@@ -124,7 +118,6 @@ function ArchiveStage({ ceramic, viewMode, onOpenFullscreen }) {
       <div className="absolute inset-0 flex items-center justify-center p-4 sm:p-6 lg:p-8">
         {/* 展品或视图变化时重新挂载图片状态。 */}
         <ImageWithFallback
-          key={ceramic.id + viewMode}
           src={ceramic.imageUrl}
           alt={`${ceramic.name} 档案扫描件`}
           className="h-full w-full object-contain drop-shadow-[0_30px_40px_rgba(61,45,26,0.2)]"
@@ -136,18 +129,23 @@ function ArchiveStage({ ceramic, viewMode, onOpenFullscreen }) {
       </div>
 
       {/* 全屏查阅入口 */}
-      <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px] transition-opacity hover:bg-black/30">
-        <div className="zoom-hint-pulse flex items-center gap-2 rounded-full border border-bronze-300/40 bg-bronze-900/60 px-5 py-2.5 backdrop-blur-md">
+      <div className={compact
+        ? 'pointer-events-none absolute inset-x-0 bottom-0 flex justify-center bg-linear-to-t from-black/65 to-transparent p-3'
+        : 'absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px] transition-opacity hover:bg-black/30'
+      }>
+        <div className={`flex items-center gap-2 rounded-full border border-bronze-300/40 bg-bronze-900/60 px-5 py-2.5 backdrop-blur-md ${compact ? '' : 'zoom-hint-pulse'}`}>
           <ZoomIn size={20} className="text-bronze-200" />
           <span className="text-sm font-medium text-bronze-100 tracking-wide">
-            点击全屏查阅文献
+            {compact ? '全屏查阅档案' : '点击全屏查阅文献'}
           </span>
         </div>
       </div>
 
-      <div className="absolute right-4 top-4 rounded-full border border-black/15 bg-black/55 px-3 py-1 text-xs tracking-[0.2em] text-bronze-100">
-        ARCHIVE SCAN
-      </div>
+      {!compact && (
+        <div className="absolute right-4 top-4 rounded-full border border-black/15 bg-black/55 px-3 py-1 text-xs tracking-[0.2em] text-bronze-100">
+          ARCHIVE SCAN
+        </div>
+      )}
     </div>
   )
 }
@@ -158,183 +156,126 @@ ArchiveStage.propTypes = {
     name: PropTypes.string.isRequired,
     imageUrl: PropTypes.string.isRequired,
   }).isRequired,
-  viewMode: PropTypes.string.isRequired,
   onOpenFullscreen: PropTypes.func.isRequired,
+  triggerRef: PropTypes.object.isRequired,
+  compact: PropTypes.bool.isRequired,
 }
 
-export default function CeramicDisplay({ ceramic, viewMode, onViewModeChange }) {
+export default function CeramicDisplay({
+  ceramic, viewMode, onViewModeChange, onOpenArchive, archiveTriggerRef, compact, navigation, recordButton,
+}) {
   const hasProcessedAsset = Boolean(ceramic.processedImageUrl)
   const activeMode = hasProcessedAsset ? viewMode : 'archive'
-  const [isFullscreenArchive, setIsFullscreenArchive] = useState(false)
-  const fullscreenCloseRef = useRef(null)
+  const stage = (
+    <div key={`stage-${activeMode}-${ceramic.id}`} className="relative z-10 h-full w-full">
+      {activeMode === 'asset' ? (
+        <AssetStage ceramic={ceramic} compact={compact} />
+      ) : (
+        <ArchiveStage
+          ceramic={ceramic}
+          onOpenFullscreen={onOpenArchive}
+          triggerRef={archiveTriggerRef}
+          compact={compact}
+        />
+      )}
+    </div>
+  )
+  const viewControls = hasProcessedAsset ? (
+    <ModeToggle viewMode={activeMode} onChange={onViewModeChange} />
+  ) : (
+    <div className="rounded-full border border-bronze-600/30 bg-black/30 px-4 py-2 text-sm text-bronze-300">
+      当前条目仅提供档案扫描件
+    </div>
+  )
+  const title = (
+    <h2 className={compact
+      ? 'text-[1.4rem] leading-snug font-semibold wrap-anywhere text-bronze-50 sm:text-3xl'
+      : 'text-2xl font-semibold text-bronze-50 sm:text-3xl lg:text-4xl lg:leading-tight'
+    }>
+      {ceramic.name}
+    </h2>
+  )
+  const englishName = ceramic.nameEn && (
+    <p lang="en" className={compact
+      ? 'mt-1.5 text-sm leading-relaxed wrap-anywhere text-bronze-400'
+      : 'mt-3 text-sm uppercase tracking-[0.25em] text-bronze-400 sm:text-base'
+    }>
+      {ceramic.nameEn}
+    </p>
+  )
+  const description = isCeramicFieldVisible(ceramic, 'description') && ceramic.description && (
+    <p className={compact
+      ? 'text-base leading-7 whitespace-pre-wrap wrap-anywhere text-bronze-200'
+      : 'mt-4 flex-1 text-sm leading-relaxed text-bronze-300 sm:text-base sm:leading-6 whitespace-pre-wrap'
+    }>
+      {ceramic.description}
+    </p>
+  )
+  const tags = isCeramicFieldVisible(ceramic, 'highlightTags') && ceramic.highlightTags?.length > 0 && (
+    <div className="flex flex-wrap gap-2">
+      {ceramic.highlightTags.slice(0, 4).map((tag) => (
+        <span
+          key={tag}
+          className="rounded-full border border-bronze-700/40 bg-bronze-900/20 px-3 py-1 text-xs text-bronze-200"
+        >
+          {tag}
+        </span>
+      ))}
+    </div>
+  )
 
-  // 舞台不保存退场快照，当前展品和视图直接决定渲染内容。
-
-  // 全屏阅读时锁定背景滚动，并在关闭后恢复焦点。
-  useEffect(() => {
-    if (isFullscreenArchive) {
-      const originalOverflow = document.body.style.overflow
-      const previouslyFocused = document.activeElement
-      document.body.style.overflow = 'hidden'
-      fullscreenCloseRef.current?.focus()
-      return () => {
-        document.body.style.overflow = originalOverflow
-        if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) {
-          previouslyFocused.focus()
-        }
-      }
-    }
-  }, [isFullscreenArchive])
-
-  // 全屏阅读器遵循统一的 Escape 退出约定。
-  useEffect(() => {
-    if (!isFullscreenArchive) return
-
-    const handleEscapeKey = (event) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        event.stopPropagation()
-        setIsFullscreenArchive(false)
-      }
-    }
-
-    window.addEventListener('keydown', handleEscapeKey)
-    return () => window.removeEventListener('keydown', handleEscapeKey)
-  }, [isFullscreenArchive])
+  if (compact) {
+    return (
+      <>
+        <div className="h-[clamp(10rem,38dvh,25rem)]">{stage}</div>
+        <div className="space-y-3 px-1 pt-3 pb-4">
+          <div>
+            {title}
+            {englishName}
+          </div>
+          {viewControls}
+        </div>
+        {navigation}
+        <section className="mt-4 space-y-3 rounded-[20px] border border-bronze-700/30 bg-black/25 p-4" aria-label="展签与文物资料">
+          {(description || tags) && <h3 className="text-lg font-semibold text-bronze-100">展签说明</h3>}
+          {description}
+          {tags}
+          {recordButton}
+        </section>
+      </>
+    )
+  }
 
   return (
-    <>
-      <div className="relative flex h-full min-h-0 flex-col overflow-hidden p-5 sm:p-6 lg:p-8">
-        <div className="pointer-events-none absolute inset-0 opacity-[0.06]">
-          <div
-            className="h-full w-full"
-            style={{
-              backgroundImage: 'radial-gradient(circle, rgba(232,220,200,0.7) 1px, transparent 1px)',
-              backgroundSize: '36px 36px',
-            }}
-          />
-        </div>
-
-        {/* 展品主图与摘要 */}
-        <div className="relative z-10 flex min-h-0 flex-1 flex-col gap-4 lg:flex-row lg:gap-8 xl:gap-12">
-          {/* 展品舞台 */}
-          <div className="relative flex-1 min-h-0 min-w-0">
-            {/* key 保证切换后只保留当前展品的舞台状态。 */}
-            <div key={`stage-${activeMode}-${ceramic.id}`} className="relative z-10 h-full w-full">
-              {activeMode === 'asset' ? (
-                <AssetStage ceramic={ceramic} viewMode={activeMode} />
-              ) : (
-                <ArchiveStage
-                  ceramic={ceramic}
-                  viewMode={activeMode}
-                  onOpenFullscreen={() => setIsFullscreenArchive(true)}
-                />
-              )}
-            </div>
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden p-5 sm:p-6 lg:p-8">
+      <div className="pointer-events-none absolute inset-0 opacity-[0.06]">
+        <div
+          className="h-full w-full"
+          style={{
+            backgroundImage: 'radial-gradient(circle, rgba(232,220,200,0.7) 1px, transparent 1px)',
+            backgroundSize: '36px 36px',
+          }}
+        />
+      </div>
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col gap-4 lg:flex-row lg:gap-8 xl:gap-12">
+        <div className="relative flex-1 min-h-0 min-w-0">{stage}</div>
+        <div className="flex min-h-0 w-full flex-1 flex-col gap-4 overflow-y-auto lg:w-[32%] lg:flex-none xl:gap-5">
+          <div className="flex justify-end">{viewControls}</div>
+          <div className="flex flex-col justify-start">
+            {title}
+            {englishName}
+            {description}
           </div>
-
-          {/* 展品摘要 */}
-          <div className="flex min-h-0 w-full flex-1 flex-col gap-4 overflow-y-auto lg:w-[32%] lg:flex-none xl:gap-5">
-            {/* 视图切换 */}
-            <div className="flex justify-end">
-              {hasProcessedAsset ? (
-                <ModeToggle viewMode={activeMode} onChange={onViewModeChange} />
-              ) : (
-                <div className="rounded-full border border-bronze-600/30 bg-black/30 px-4 py-2 text-sm text-bronze-300">
-                  当前条目仅提供档案扫描件
-                </div>
-              )}
-            </div>
-
-            {/* 文物名称与说明 */}
-            <div className="flex flex-col justify-start">
-              <h2 className="text-2xl font-semibold text-bronze-50 sm:text-3xl lg:text-4xl lg:leading-tight">
-                {ceramic.name}
-              </h2>
-
-              {ceramic.nameEn && (
-                <p className="mt-3 text-sm uppercase tracking-[0.25em] text-bronze-400 sm:text-base">
-                  {ceramic.nameEn}
-                </p>
-              )}
-
-              {isCeramicFieldVisible(ceramic, 'description') && ceramic.description && (
-                <p className="mt-4 flex-1 text-sm leading-relaxed text-bronze-300 sm:text-base sm:leading-6 whitespace-pre-wrap">
-                  {ceramic.description}
-                </p>
-              )}
-            </div>
-
-            {/* 展签标签 */}
-            {isCeramicFieldVisible(ceramic, 'highlightTags') && ceramic.highlightTags?.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {ceramic.highlightTags.slice(0, 4).map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-full border border-bronze-700/40 bg-bronze-900/20 px-3 py-1 text-xs text-bronze-200"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
+          {tags}
         </div>
       </div>
-
-      {/* 全屏档案阅读器通过 Portal 脱离主展台的裁切边界。 */}
-      {isFullscreenArchive && createPortal(
-        <div
-          onClick={() => setIsFullscreenArchive(false)}
-          className="overlay-fade fixed inset-0 z-[100] h-[100dvh] w-[100dvw] overflow-y-auto overflow-x-hidden bg-black select-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
-          role="dialog"
-          aria-modal="true"
-          aria-label={`${ceramic.name}档案全屏视图`}
-        >
-            {/* 固定关闭按钮 */}
-            <button
-              ref={fullscreenCloseRef}
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                setIsFullscreenArchive(false)
-              }}
-              className="fixed right-8 top-8 z-[110] flex min-h-[64px] min-w-[64px] items-center justify-center rounded-full border border-white/10 bg-white/10 text-white transition-colors hover:bg-white/20 active:scale-[0.95] select-none"
-              aria-label="关闭全屏视图"
-            >
-              <X size={32} strokeWidth={2} />
-            </button>
-
-            {/* 居中的可滚动档案长图 */}
-            <div
-              className="flex min-h-full w-full items-start justify-center py-16 md:py-24"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="sheet-pop relative select-none">
-                <ImageWithFallback
-                  key={`fullscreen-${ceramic.id}`}
-                  src={ceramic.imageUrl}
-                  alt={`${ceramic.name} 档案扫描件 - 全屏检阅`}
-                  className="h-auto w-[85vw] max-w-4xl lg:max-w-5xl object-contain drop-shadow-2xl select-none touch-pan-y"
-                  style={{
-                    filter: 'contrast(1.02) brightness(0.98)',
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* 触控滚动提示 */}
-            <div className="hint-rise fixed bottom-10 left-1/2 z-[110] pointer-events-none">
-              <div className="capsule-bob flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-6 py-3 text-sm text-white/90 backdrop-blur-md">
-                <span className="text-lg">↕</span>
-                <span>触控上下滑动以阅览全卷</span>
-              </div>
-            </div>
-        </div>,
-        document.body
-      )}
-    </>
+    </div>
   )
+}
+
+ModeToggle.propTypes = {
+  viewMode: PropTypes.oneOf(['asset', 'archive']).isRequired,
+  onChange: PropTypes.func.isRequired,
 }
 
 CeramicDisplay.propTypes = {
@@ -352,4 +293,9 @@ CeramicDisplay.propTypes = {
   }).isRequired,
   viewMode: PropTypes.oneOf(['asset', 'archive']).isRequired,
   onViewModeChange: PropTypes.func.isRequired,
+  onOpenArchive: PropTypes.func.isRequired,
+  archiveTriggerRef: PropTypes.object.isRequired,
+  compact: PropTypes.bool.isRequired,
+  navigation: PropTypes.node.isRequired,
+  recordButton: PropTypes.node.isRequired,
 }

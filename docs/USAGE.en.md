@@ -4,11 +4,11 @@
 
 ## Explore the gallery
 
-Open the [live gallery](https://shouzhou-kiln-interactive.yuxuan.wiki/) and select an artifact from the bottom strip. The left and right arrow keys move between artifacts; the strip's arrow buttons scroll its thumbnails.
+Open the [live gallery](https://shouzhou-kiln-interactive.yuxuan.wiki/). The wide layout places the image and exhibit label side by side, with the artifact strip below. The compact layout starts with the image, name and view controls, followed by a swipeable thumbnail strip and a vertically scrollable exhibit label. In both layouts, use the Left and Right Arrow keys to change artifacts or the strip's arrow buttons to browse thumbnails.
 
 “数字资产” displays the processed artifact image; “档案视图” displays the scanned archive. There are 76 artifacts with processed images and 2 that open directly in archive view. Select an archive image to read it in fullscreen and scroll through the page.
 
-Select “查看文物资料” to read dimensions, excavation, collection and technical features. Press `Esc` or use the close button to exit the record panel or fullscreen reader. In the record dialog, use `Tab` and `Shift+Tab` to cycle focus between its controls.
+Select “查看文物资料” to read dimensions, excavation, collection and technical features. In the compact layout, this button is below the exhibit label and opens a scrollable single-column panel. Press `Esc` or use the close button to exit the record panel or fullscreen reader. Use `Tab` and `Shift+Tab` to cycle focus within either dialog.
 
 ## Run locally
 
@@ -32,7 +32,7 @@ npm run preview -- --host 127.0.0.1 --port 4173 --strictPort
 
 Open `http://127.0.0.1:4173/`. Preview serves `dist/`; rebuild after editing source files. Serve `dist/` with an HTTP static server for a website, local machine or intranet. For offline use, install dependencies and build first, then run a local HTTP server. Images are local and fonts use the system font stack.
 
-Browser requirements: Chrome 111+, Safari 16.4+, Firefox 128+. The gallery prioritizes landscape displays and adapts its layout on narrow screens.
+Browser requirements are Chrome 111+, Safari 16.4+ and Firefox 128+. The wide layout appears when the viewport is at least 1024 CSS pixels wide and wider than it is tall. Other sizes use the compact layout. An embedded gallery uses its iframe's viewport. Resizing or rotating preserves the selected artifact, view and open dialog.
 
 ## Troubleshooting
 

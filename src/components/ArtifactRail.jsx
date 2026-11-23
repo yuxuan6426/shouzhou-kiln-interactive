@@ -9,29 +9,49 @@ function getThumbnail(ceramic) {
   return ceramic.thumbnailUrl || ceramic.processedImageUrl || ceramic.imageUrl
 }
 
-export default function ArtifactRail({ ceramics, selectedId, onSelect }) {
+export default function ArtifactRail({ ceramics, selectedId, onSelect, compact }) {
   const railRef = useRef(null)
   const itemRefs = useRef(new Map())
 
   useEffect(() => {
     const activeNode = itemRefs.current.get(selectedId)
-    if (activeNode) {
-      activeNode.scrollIntoView({
-        behavior: 'smooth',
-        inline: 'center',
-        block: 'nearest',
+    const rail = railRef.current
+    if (activeNode && rail) {
+      const item = activeNode.getBoundingClientRect()
+      const track = rail.getBoundingClientRect()
+      // 只滚动缩略图轨道，避免选中项把窄屏正文带离当前位置。
+      rail.scrollBy({
+        left: item.left - track.left + (item.width - track.width) / 2,
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
       })
     }
   }, [selectedId])
 
-  useEffect(() => () => itemRefs.current.clear(), [])
+  useEffect(() => {
+    if (compact) return
+    const rail = railRef.current
+    const handleWheel = (event) => {
+      if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+        event.preventDefault()
+        rail.scrollLeft += event.deltaY
+      }
+    }
+    rail.addEventListener('wheel', handleWheel, { passive: false })
+    return () => rail.removeEventListener('wheel', handleWheel)
+  }, [compact])
 
   const scrollRail = (delta) => {
-    railRef.current?.scrollBy({ left: delta, behavior: 'smooth' })
+    railRef.current?.scrollBy({
+      left: delta,
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+    })
   }
 
   return (
-    <div className="relative z-10 px-4 pb-3 sm:px-6 lg:px-8 lg:pb-4">
+    <nav
+      aria-label="文物导航"
+      className={compact ? 'relative z-10' : 'relative z-10 px-4 pb-3 sm:px-6 lg:px-8 lg:pb-4'}
+    >
       <div className="rounded-[24px] border border-bronze-700/30 bg-black/30 px-3 py-2 shadow-[0_16px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:px-4">
         <div className="mb-2 flex items-center justify-between gap-2">
           <p className="text-[10px] uppercase tracking-[0.25em] text-bronze-500/70">文物导航</p>
@@ -57,13 +77,7 @@ export default function ArtifactRail({ ceramics, selectedId, onSelect }) {
 
         <div
           ref={railRef}
-          onWheel={(event) => {
-            if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
-              event.preventDefault()
-              event.currentTarget.scrollLeft += event.deltaY
-            }
-          }}
-          className="flex gap-2 overflow-x-auto pb-1"
+          className={`flex gap-2 overflow-x-auto pb-1 ${compact ? 'overscroll-x-contain' : ''}`}
         >
           {ceramics.map((ceramic) => {
             const isActive = ceramic.id === selectedId
@@ -81,12 +95,11 @@ export default function ArtifactRail({ ceramics, selectedId, onSelect }) {
                 type="button"
                 onClick={() => onSelect(ceramic)}
                 aria-pressed={isActive}
-                className={`group relative flex flex-col shrink-0 overflow-hidden rounded-[18px] border p-1.5 text-left transition active:scale-[0.96] ${
+                className={`group relative flex shrink-0 flex-col overflow-hidden rounded-[18px] border p-1.5 text-left transition active:scale-[0.96] ${compact ? 'w-28' : 'w-[8.5rem]'} ${
                   isActive
                     ? 'border-celadon-400/50 bg-celadon-900/30 shadow-[0_0_0_1px_rgba(139,203,167,0.2),0_12px_30px_rgba(0,0,0,0.35)]'
                     : 'border-bronze-700/20 bg-bronze-900/15 hover:border-bronze-500/40'
                 }`}
-                style={{ width: '8.5rem' }}
               >
                 <div className="relative overflow-hidden rounded-[14px] border border-white/5 bg-black/20">
                   <ImageWithFallback
@@ -112,7 +125,7 @@ export default function ArtifactRail({ ceramics, selectedId, onSelect }) {
           })}
         </div>
       </div>
-    </div>
+    </nav>
   )
 }
 
@@ -131,4 +144,5 @@ ArtifactRail.propTypes = {
   ).isRequired,
   selectedId: PropTypes.string,
   onSelect: PropTypes.func.isRequired,
+  compact: PropTypes.bool.isRequired,
 }
